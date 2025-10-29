@@ -1,0 +1,105 @@
+#include <xc.h>
+//#include <stdint.h>
+
+// Configurações do PIC
+#pragma config FOSC = XT, WDTE = OFF, PWRTE = OFF, BOREN = OFF, LVP = OFF, CPD = OFF, WRT = OFF, CP = OFF
+
+#define _XTAL_FREQ 4000000
+
+volatile uint16_t numero = 0;
+volatile uint8_t digito_atual = 0;
+
+const uint8_t tabela_7seg[] =
+{
+    0x3F, // 0
+    0x06, // 1
+    0x5B, // 2
+    0x4F, // 3
+    0x66, // 4
+    0x6D, // 5
+    0x7D, // 6
+    0x07, // 7
+    0x7F, // 8
+    0x6F  // 9
+};
+
+void atualiza_display(uint16_t valor)
+{
+    uint8_t digitos[4];
+    digitos[0] = valor % 10;
+    digitos[1] = (valor / 10) % 10;
+    digitos[2] = (valor / 100) % 10;
+    digitos[3] = (valor / 1000) % 10;
+
+    PORTD = tabela_7seg[digitos[digito_atual]];
+    
+    PORTB &= 0x0F;
+    PORTB |= (1 << (digito_atual + 4));
+    
+    if (digito_atual == 1)
+        PORTDbits.RD7 = 1;
+    else
+        PORTDbits.RD7 = 0;
+
+    digito_atual++;
+    if (digito_atual > 3)
+    {
+        digito_atual = 0;
+    }
+}
+
+void __interrupt() ISR()
+{
+    if (T0IF)
+    {
+        TMR0 = 0;
+        T0IF = 0;
+
+        atualiza_display(numero);
+    }
+}
+
+uint16_t adc_read()
+{
+    ADCON0 |= 0x04;             // Inicia conversão (GO/DONE = 1)
+    while (ADCON0 & 0x04);      // Espera conversão terminar
+    return ((ADRESH << 8) | ADRESL); // Retorna valor de 10 bits
+}
+
+void main()
+{
+    OPTION_REG = 0b00000100; // Prescaler 1:64
+    TMR0 = 0;
+    T0IE = 1;
+    GIE = 1;
+    
+    TRISA |= 0x02;      // RA0 como entrada
+    ADCON1 = 0x80;      // AN0 analógico, Vref+ = VDD, Vref- = VSS
+    ADCON0 = 0x09;      // Seleciona AN0, liga ADC
+
+
+
+    TRISD = 0x00;
+    TRISB &= ~(0xF0);
+
+    PORTD = 0x00;
+    PORTB &= 0x0F;
+    
+    float tensao = 0;
+
+
+
+    while (1)
+    {
+//        __delay_ms(508); // tempo equivalente a 31 interrupções de 16.384 ms
+//        numero++;
+//        if (numero > 9999)
+//        {
+//            numero = 0;
+//        }
+//        __delay_ms(500);
+        
+//        numero = adc_read(); 
+        numero = (adc_read() * 50) / 1023;
+    }
+}
